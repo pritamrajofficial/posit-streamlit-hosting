@@ -1,56 +1,48 @@
-import os.path
-
-import altair as alt
-import pandas as pd
 import streamlit as st
+import pandas as pd
 
-HERE = os.path.dirname(os.path.abspath(__file__))
+st.set_page_config(page_title="Employee Analytics Dashboard", layout="wide")
 
-st.title("Top 5%" " income share")
-st.markdown("Share of income received by the richest 5%" " of the population.")
-DATA = os.path.join(HERE, "data.csv")
+st.title("📊 Employee Analytics Dashboard (50K+ Rows)")
 
-
+# Load data
 @st.cache_data
-def load_data(nrows):
-    return pd.read_csv("./data.csv", nrows=nrows)
+def load_data():
+    return pd.read_csv("employee_data.csv")
 
+df = load_data()
 
-data_load_state = st.text("Loading data...")
-data = load_data(10000)
-data_load_state.text("")
+st.success(f"Loaded {len(df):,} employee records")
 
-countries = st.multiselect(
-    "Countries",
-    list(sorted({d for d in data["Entity"]})),
-    default=["Australia", "China", "Germany", "Japan", "United States"],
-)
-earliest_year = data["Year"].min()
-latest_year = data["Year"].max()
-min_year, max_year = st.slider(
-    "Year Range",
-    min_value=int(earliest_year),
-    max_value=int(latest_year),
-    value=[int(earliest_year), int(latest_year)],
-)
-filtered_data = data[data["Entity"].isin(countries)]
-filtered_data = filtered_data[filtered_data["Year"] >= min_year]
-filtered_data = filtered_data[filtered_data["Year"] <= max_year]
+# Filters
+col1, col2, col3 = st.columns(3)
+with col1:
+    dept = st.selectbox("Select Department", ["All"] + sorted(df["Department"].unique()))
+with col2:
+    loc = st.selectbox("Select Location", ["All"] + sorted(df["Location"].unique()))
+with col3:
+    min_exp = st.slider("Minimum Experience (years)", 0, 15, 0)
 
-chart = (
-    alt.Chart(filtered_data)
-    .mark_line()
-    .encode(
-        x=alt.X("Year", axis=alt.Axis(format="d")),
-        y=alt.Y("Percent", axis=alt.Axis(format="~s")),
-        color="Entity",
-        strokeDash="Entity",
-    )
-)
-st.altair_chart(chart, use_container_width=True)
+# Filtered dataset
+filtered_df = df.copy()
+if dept != "All":
+    filtered_df = filtered_df[filtered_df["Department"] == dept]
+if loc != "All":
+    filtered_df = filtered_df[filtered_df["Location"] == loc]
+filtered_df = filtered_df[filtered_df["Experience"] >= min_exp]
 
-if st.checkbox("Show raw data"):
-    st.subheader("Raw data")
-    st.write(filtered_data)
+st.write(f"Showing {len(filtered_df):,} matching employees")
 
-st.markdown("Source: <https://ourworldindata.org/grapher/top-5-income-share>")
+# Display data
+st.dataframe(filtered_df.head(100))  # limit display for performance
+
+# Summary statistics
+st.subheader("📈 Summary Statistics")
+st.write(filtered_df.describe())
+
+# Charts
+st.subheader("💰 Average Salary by Department")
+st.bar_chart(filtered_df.groupby("Department")["Salary"].mean())
+
+st.subheader("📍 Employee Count by Location")
+st.bar_chart(filtered_df["Location"].value_counts())
